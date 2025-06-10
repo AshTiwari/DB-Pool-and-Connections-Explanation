@@ -744,6 +744,7 @@ async function goodQuery() {
             successfulRequests: 0,
             responseTimes: [],
             nextRequestId: 1,
+            activeTimeouts: [], // ADD THIS LINE
         };
 
         const MAX_CONNECTIONS = 5;
@@ -812,7 +813,10 @@ async function goodQuery() {
             updatePoolDisplay();
 
             // Simulate the database query time
-            setTimeout(() => {
+            const timeoutId = setTimeout(() => {
+                // Remove this timeout from the active list upon completion
+                poolState.activeTimeouts = poolState.activeTimeouts.filter(tId => tId !== timeoutId);
+
                 // Task is done, release the connection
                 poolState.connections[connIndex] = false;
                 poolState.successfulRequests++;
@@ -825,6 +829,9 @@ async function goodQuery() {
                 // After releasing a connection, check the queue again
                 processQueue();
             }, duration);
+
+            // Add this timeout to the active list for cleanup later
+            poolState.activeTimeouts.push(timeoutId);
         }
 
         // Adds a new request to the queue and tries to process it
@@ -853,10 +860,14 @@ async function goodQuery() {
         function simulateBurst() {
             log('💥 Simulating a burst of 10 requests!');
             for (let i = 0; i < 10; i++) {
-                // Add a small delay between burst requests to make the simulation clearer
-                setTimeout(() => {
+                // Stagger requests slightly to make the simulation clearer
+                const timeoutId = setTimeout(() => {
+                    // Remove this timeout from the active list
+                    poolState.activeTimeouts = poolState.activeTimeouts.filter(tId => tId !== timeoutId);
                     simulateRequest(Math.random() * 1000 + 500); // Random duration
                 }, i * 100);
+                // Track this timeout as well
+                poolState.activeTimeouts.push(timeoutId);
             }
         }
 
@@ -866,8 +877,11 @@ async function goodQuery() {
         }
 
         function resetPool() {
-            // This is a bit complex due to ongoing timeouts, so we'll just reset the state object
-            // and clear visual indicators. Active timeouts will still complete.
+            // 1. Cancel all pending operations before resetting the state.
+            log(`🔄 Cancelling ${poolState.activeTimeouts.length} in-flight operations...`);
+            poolState.activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+            
+            // 2. Now, safely reset the state.
             poolState = {
                 connections: [false, false, false, false, false],
                 requestQueue: [],
@@ -875,8 +889,10 @@ async function goodQuery() {
                 successfulRequests: 0,
                 responseTimes: [],
                 nextRequestId: 1,
+                activeTimeouts: [], // Reset the tracking array
             };
-            log('🔄 Pool simulator has been reset.');
+            
+            log('✅ Pool simulator has been reset.');
             updatePoolDisplay();
         }
 
