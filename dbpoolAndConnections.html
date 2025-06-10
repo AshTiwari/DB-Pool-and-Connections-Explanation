@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Connection Pool Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 5px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: transparent;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            white-space: nowrap;
+            min-width: 140px;
+        }
+
+        .tab.active {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .tab:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        .content {
+            display: none;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .demo-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            border-left: 5px solid #667eea;
+        }
+
+        .visual-demo {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .connection-pool {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .app-box {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            min-width: 120px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .pool-box {
+            background: linear-gradient(45deg, #54a0ff, #2e86de);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            min-width: 150px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .db-box {
+            background: linear-gradient(45deg, #5f27cd, #341f97);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            min-width: 120px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .connection {
+            width: 4px;
+            height: 60px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+            margin: 10px auto;
+            border-radius: 2px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .connections-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(8px, 1fr));
+            gap: 5px;
+            max-width: 100px;
+            margin: 10px auto;
+        }
+
+        .conn-line {
+            width: 8px;
+            height: 30px;
+            background: #2ecc71;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .conn-line.busy {
+            background: #e74c3c;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            overflow-x: auto;
+            border-left: 4px solid #667eea;
+        }
+
+        .highlight {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .warning {
+            background: rgba(255, 107, 107, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .performance-chart {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        h3 {
+            color: #555;
+            margin: 20px 0 10px 0;
+            font-size: 1.3rem;
+        }
+
+        p, li {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-top: 4px solid;
+        }
+
+        .stat-card:nth-child(1) { border-top-color: #667eea; }
+        .stat-card:nth-child(2) { border-top-color: #2ecc71; }
+        .stat-card:nth-child(3) { border-top-color: #f39c12; }
+        .stat-card:nth-child(4) { border-top-color: #e74c3c; }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Database Connection Pool Mastery</h1>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('basics')">Basics</button>
+            <button class="tab" onclick="showTab('why-multiple')">Why Multiple?</button>
+            <button class="tab" onclick="showTab('performance')">Performance</button>
+            <button class="tab" onclick="showTab('concurrency')">Concurrency</button>
+            <button class="tab" onclick="showTab('risks')">Risks & Limits</button>
+            <button class="tab" onclick="showTab('demo')">Interactive Demo</button>
+        </div>
+
+        <div id="basics" class="content active">
+            <h2>🎯 What is a Database Connection Pool?</h2>
+
+            <div class="visual-demo">
+                <div class="connection-pool">
+                    <div class="app-box">
+                        <strong>Your App</strong><br>
+                        <small>Multiple threads/requests</small>
+                    </div>
+                    <div class="pool-box">
+                        <strong>Connection Pool</strong><br>
+                        <div class="connections-grid">
+                            <div class="conn-line"></div>
+                            <div class="conn-line"></div>
+                            <div class="conn-line"></div>
+                            <div class="conn-line"></div>
+                            <div class="conn-line"></div>
+                        </div>
+                        <small>5 Pre-established connections</small>
+                    </div>
+                    <div class="db-box">
+                        <strong>Database</strong><br>
+                        <small>PostgreSQL/MySQL/etc</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight">
+                <strong>Connection Pool:</strong> A cache of database connections maintained by your application. Instead of creating/destroying connections for each request, you reuse existing ones from the pool.
+            </div>
+
+            <h3>How it Works:</h3>
+            <ol>
+                <li><strong>Pool Creation:</strong> App starts with N pre-established DB connections</li>
+                <li><strong>Request Comes In:</strong> App needs to query DB</li>
+                <li><strong>Borrow:</strong> App takes an available connection from pool</li>
+                <li><strong>Execute:</strong> Runs the query using that connection</li>
+                <li><strong>Return:</strong> Connection goes back to pool for reuse</li>
+            </ol>
+
+            <div class="code-block">
+// Without Pool (Bad)
+function handleRequest() {
+  const conn = new DatabaseConnection(); // Expensive!
+  const result = conn.query('SELECT * FROM users');
+  conn.close(); // Wasteful!
+  return result;
+}
+
+// With Pool (Good)
+function handleRequest() {
+  const conn = pool.getConnection(); // Fast!
+  const result = conn.query('SELECT * FROM users');
+  pool.releaseConnection(conn); // Reuse!
+  return result;
+}
+            </div>
+        </div>
+
+        <div id="why-multiple" class="content">
+            <h2>🤔 Why Multiple Connections? Why Not Just One?</h2>
+
+            <div class="warning">
+                <strong>Single Connection Problem:</strong> One connection = One query at a time = Blocking = Poor performance
+            </div>
+
+            <h3>The Single Connection Bottleneck:</h3>
+
+            <div class="demo-section">
+                <h4>Scenario: 100 users hit your API simultaneously</h4>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin: 20px 0;">
+                    <div>
+                        <h4 style="color: #e74c3c;">❌ Single Connection</h4>
+                        <ul>
+                            <li>Request 1: Executes immediately</li>
+                            <li>Request 2: Waits for Request 1</li>
+                            <li>Request 3: Waits for Request 2</li>
+                            <li>Request 100: Waits 99 requests! 😱</li>
+                        </ul>
+                        <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                            <strong>Total Time:</strong> 100 × 50ms = 5 seconds!
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 style="color: #2ecc71;">✅ Connection Pool (10 connections)</h4>
+                        <ul>
+                            <li>Requests 1-10: Execute immediately</li>
+                            <li>Requests 11-20: Wait for first batch</li>
+                            <li>Only 10 batches needed</li>
+                            <li>Much faster!</li>
+                        </ul>
+                        <div style="background: #e6ffe6; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                            <strong>Total Time:</strong> 10 × 50ms = 500ms!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Why Databases Need Multiple Connections:</h3>
+            <ul>
+                <li><strong>Blocking I/O:</strong> DB queries take time (network + disk)</li>
+                <li><strong>Transactions:</strong> Long-running transactions block others</li>
+                <li><strong>Concurrency:</strong> Modern apps serve many users simultaneously</li>
+                <li><strong>Different Operations:</strong> Reads, writes, admin tasks can run parallel</li>
+            </ul>
+
+            <div class="code-block">
+// This is why single connection fails:
+const conn = getSingleConnection();
+
+// Request A: Long analytics query (5 seconds)
+conn.query('SELECT COUNT(*) FROM huge_table WHERE complex_condition');
+
+// Request B: Simple user lookup (10ms) - BUT WAITS 5 SECONDS!
+conn.query('SELECT name FROM users WHERE id = 123');
+            </div>
+        </div>
+
+        <div id="performance" class="content">
+            <h2>⚡ Performance Impact</h2>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">100ms</div>
+                    <div class="stat-label">Connection Creation Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">1ms</div>
+                    <div class="stat-label">Pool Checkout Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">10x</div>
+                    <div class="stat-label">Typical Throughput Improvement</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">80%</div>
+                    <div class="stat-label">Resource Usage Reduction</div>
+                </div>
+            </div>
+
+            <h3>Performance Benefits:</h3>
+
+            <div class="performance-chart">
+                <h4>🚀 Speed Improvements</h4>
+                <ul>
+                    <li><strong>No Connection Overhead:</strong> Skip TCP handshake, auth, SSL setup</li>
+                    <li><strong>Immediate Availability:</strong> Connections ready to use</li>
+                    <li><strong>Parallel Processing:</strong> Multiple queries simultaneously</li>
+                    <li><strong>Reduced Latency:</strong> No waiting for connection establishment</li>
+                </ul>
+            </div>
+
+            <div class="performance-chart">
+                <h4>💰 Resource Savings</h4>
+                <ul>
+                    <li><strong>Memory:</strong> Reuse connection objects</li>
+                    <li><strong>CPU:</strong> Less connection setup/teardown</li>
+                    <li><strong>Network:</strong> Persistent connections</li>
+                    <li><strong>Database Load:</strong> Fewer connection negotiations</li>
+                </ul>
+            </div>
+
+            <div class="highlight">
+                <strong>Real Example:</strong> An e-commerce site went from 50 RPS to 500 RPS just by implementing connection pooling with proper sizing!
+            </div>
+
+            <div class="code-block">
+// Performance comparison
+// Without Pool: 100ms connection + 10ms query = 110ms per request
+// With Pool: 1ms checkout + 10ms query = 11ms per request
+// That's 10x faster! 🚀
+
+// Pool configuration for optimal performance
+const poolConfig = {
+  min: 5,           // Always keep 5 connections warm
+  max: 20,          // Scale up to 20 under load
+  idleTimeout: 30000, // Close idle connections after 30s
+  acquireTimeout: 60000 // Wait max 60s for connection
+};
+            </div>
+        </div>
+
+        <div id="concurrency" class="content">
+            <h2>🔄 Concurrency & Parallel Requests</h2>
+
+            <div class="highlight">
+                <strong>Yes!</strong> Connection pools are specifically designed for concurrent and parallel requests. Each connection can handle one query at a time, but multiple connections = multiple simultaneous queries.
+            </div>
+
+            <h3>Concurrency Patterns:</h3>
+
+            <div class="demo-section">
+                <h4>1. Web Server with Multiple Threads</h4>
+                <div class="code-block">
+// Express.js example
+app.get('/users/:id', async (req, res) => {
+  const conn = await pool.getConnection(); // Thread-safe
+  const user = await conn.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+  pool.releaseConnection(conn);
+  res.json(user);
+});
+
+// 100 simultaneous requests = 100 threads can get different connections
+                </div>
+            </div>
+
+            <div class="demo-section">
+                <h4>2. Async/Await Parallel Processing</h4>
+                <div class="code-block">
+// Multiple parallel database operations
+async function getUserDashboard(userId) {
+  const [user, orders, preferences] = await Promise.all([
+    pool.query('SELECT * FROM users WHERE id = ?', [userId]),      // Connection 1
+    pool.query('SELECT * FROM orders WHERE user_id = ?', [userId]), // Connection 2
+    pool.query('SELECT * FROM prefs WHERE user_id = ?', [userId])   // Connection 3
+  ]);
+
+  return { user, orders, preferences };
+}
+                </div>
+            </div>
+
+            <h3>Thread Safety & Connection Pools:</h3>
+            <ul>
+                <li><strong>Thread-Safe:</strong> Good pools handle concurrent access safely</li>
+                <li><strong>Connection Per Thread:</strong> Each thread gets its own connection from pool</li>
+                <li><strong>No Sharing:</strong> One connection used by one thread at a time</li>
+                <li><strong>Automatic Management:</strong> Pool handles locking and allocation</li>
+            </ul>
+
+            <div class="warning">
+                <strong>Important:</strong> Don't share a single connection between threads! Always get a fresh connection from the pool for each operation.
+            </div>
+
+            <h3>Scaling Considerations:</h3>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">CPU Cores</div>
+                    <div class="stat-label">Good starting point for pool size</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">2x Cores</div>
+                    <div class="stat-label">For I/O heavy workloads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">Monitor</div>
+                    <div class="stat-label">Pool utilization & wait times</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">Tune</div>
+                    <div class="stat-label">Based on actual metrics</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="risks" class="content">
+            <h2>⚠️ Risks, Limits & Database Crashes</h2>
+
+            <div class="warning">
+                <strong>Can Overuse Crash Your Database? YES!</strong> Every database has connection limits, and exceeding them can cause crashes, rejections, or severe performance degradation.
+            </div>
+
+            <h3>Database Connection Limits:</h3>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">100</div>
+                    <div class="stat-label">PostgreSQL Default</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">151</div>
+                    <div class="stat-label">MySQL Default</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">50-1000+</div>
+                    <div class="stat-label">Varies by Config</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">Memory</div>
+                    <div class="stat-label">Each Connection Uses RAM</div>
+                </div>
+            </div>
+
+            <h3>Common Problems & Solutions:</h3>
+
+            <div class="demo-section">
+                <h4>❌ Problem: Too Many Pools</h4>
+                <p>Multiple app instances each creating large pools:</p>
+                <div class="code-block">
+// 10 app servers × 50 connections each = 500 connections!
+// If DB limit is 100 → CRASH! 💥
+                </div>
+
+                <h4>✅ Solution: Calculate Total Connections</h4>
+                <div class="code-block">
+// If you have 10 app servers and DB limit is 100:
+// Each server should have max 8-9 connections
+// Leave room for admin connections!
+
+const poolSize = Math.floor(DB_MAX_CONNECTIONS / APP_INSTANCES) - 2;
+                </div>
+            </div>
+
+            <div class="demo-section">
+                <h4>❌ Problem: Connection Leaks</h4>
+                <div class="code-block">
+// This leaks connections!
+function badQuery() {
+  const conn = pool.getConnection();
+  return conn.query('SELECT * FROM users');
+  // Connection never returned to pool! 😱
+}
+                </div>
+
+                <h4>✅ Solution: Always Release</h4>
+                <div class="code-block">
+// Proper connection handling
+async function goodQuery() {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    return await conn.query('SELECT * FROM users');
+  } finally {
+    if (conn) pool.releaseConnection(conn); // Always release!
+  }
+}
+                </div>
+            </div>
+
+            <h3>Best Practices to Avoid Crashes:</h3>
+            <ul>
+                <li><strong>Monitor Pool Usage:</strong> Track active/idle connections</li>
+                <li><strong>Set Timeouts:</strong> Don't wait forever for connections</li>
+                <li><strong>Connection Health Checks:</strong> Test connections before use</li>
+                <li><strong>Graceful Degradation:</strong> Handle pool exhaustion gracefully</li>
+                <li><strong>Load Testing:</strong> Test with realistic traffic</li>
+            </ul>
+
+            <div class="highlight">
+                <strong>Golden Rule:</strong> Your total connections across ALL app instances should be ≤ 80% of database max connections.
+            </div>
+        </div>
+
+        <div id="demo" class="content">
+            <h2>🎮 Interactive Pool Simulator</h2>
+
+            <div class="demo-section">
+                <div class="visual-demo">
+                    <h3>Connection Pool Status</h3>
+                    <div class="connection-pool">
+                        <div class="app-box">
+                            <strong>Requests</strong><br>
+                            <div id="requestQueue">Queue: 0</div>
+                        </div>
+                        <div class="pool-box">
+                            <strong>Pool (Max: 5)</strong><br>
+                            <div class="connections-grid" id="poolConnections">
+                                <div class="conn-line" data-conn="0"></div>
+                                <div class="conn-line" data-conn="1"></div>
+                                <div class="conn-line" data-conn="2"></div>
+                                <div class="conn-line" data-conn="3"></div>
+                                <div class="conn-line" data-conn="4"></div>
+                            </div>
+                            <div id="poolStats">Available: 5</div>
+                        </div>
+                        <div class="db-box">
+                            <strong>Database</strong><br>
+                            <div id="dbLoad">Load: 0%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn" onclick="simulateRequest()">Send Request</button>
+                    <button class="btn" onclick="simulateBurst()">Send 10 Requests</button>
+                    <button class="btn" onclick="simulateSlowQuery()">Slow Query (5s)</button>
+                    <button class="btn" onclick="resetPool()">Reset Pool</button>
+                </div>
+
+                <div id="simulationLog" class="code-block" style="height: 200px; overflow-y: auto; font-size: 12px;">
+                    <div>🎯 Connection Pool Simulator Ready!</div>
+                    <div>💡 Try sending requests to see how the pool manages connections</div>
+                </div>
+            </div>
+
+            <div class="stats" id="simulationStats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalRequests">0</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="successfulRequests">0</div>
+                    <div class="stat-label">Successful</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="queuedRequests">0</div>
+                    <div class="stat-label">Currently Queued</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgResponseTime">0ms</div>
+                    <div class="stat-label">Avg Response Time</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all content
+            document.querySelectorAll('.content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected content
+            document.getElementById(tabName).classList.add('active');
+
+            // Activate selected tab
+            // A bit of a hack to get the button element from the onclick event
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                if (tab.getAttribute('onclick') === `showTab('${tabName}')`) {
+                    tab.classList.add('active');
+                }
+            });
+        }
+
+        // --- START OF COMPLETED CODE ---
+
+        // Pool simulator state
+        let poolState = {
+            connections: [false, false, false, false, false], // false = available, true = busy
+            requestQueue: [], // A queue for pending requests
+            totalRequests: 0,
+            successfulRequests: 0,
+            responseTimes: [],
+            nextRequestId: 1,
+        };
+
+        const MAX_CONNECTIONS = 5;
+
+        // Function to update all visual elements based on the current state
+        function updatePoolDisplay() {
+            const connections = document.querySelectorAll('#poolConnections .conn-line');
+            let busyCount = 0;
+
+            connections.forEach((conn, index) => {
+                if (poolState.connections[index]) {
+                    conn.classList.add('busy');
+                    busyCount++;
+                } else {
+                    conn.classList.remove('busy');
+                }
+            });
+
+            const availableCount = MAX_CONNECTIONS - busyCount;
+            document.getElementById('poolStats').textContent = `Available: ${availableCount}`;
+            document.getElementById('requestQueue').textContent = `Queue: ${poolState.requestQueue.length}`;
+            document.getElementById('dbLoad').textContent = `Load: ${Math.round((busyCount / MAX_CONNECTIONS) * 100)}%`;
+
+            // Update main stats cards
+            document.getElementById('totalRequests').textContent = poolState.totalRequests;
+            document.getElementById('successfulRequests').textContent = poolState.successfulRequests;
+            document.getElementById('queuedRequests').textContent = poolState.requestQueue.length;
+
+            const avgTime = poolState.responseTimes.length > 0
+                ? Math.round(poolState.responseTimes.reduce((a, b) => a + b, 0) / poolState.responseTimes.length)
+                : 0;
+            document.getElementById('avgResponseTime').textContent = `${avgTime}ms`;
+        }
+
+        // Function to add a message to the simulation log
+        function log(message) {
+            const logDiv = document.getElementById('simulationLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Finds the index of an available connection, or returns -1 if none
+        function getAvailableConnection() {
+            return poolState.connections.findIndex(isBusy => !isBusy);
+        }
+
+        // Main function to process the request queue
+        function processQueue() {
+            if (poolState.requestQueue.length === 0) {
+                return; // Nothing to process
+            }
+            
+            const connIndex = getAvailableConnection();
+            if (connIndex === -1) {
+                return; // No connections available right now
+            }
+
+            // Take the first request from the queue
+            const request = poolState.requestQueue.shift();
+            const { id, duration, startTime } = request;
+
+            // Mark the connection as busy
+            poolState.connections[connIndex] = true;
+            log(`✅ R${id}: Got connection #${connIndex + 1}. Starting ${duration/1000}s query.`);
+            updatePoolDisplay();
+
+            // Simulate the database query time
+            setTimeout(() => {
+                // Task is done, release the connection
+                poolState.connections[connIndex] = false;
+                poolState.successfulRequests++;
+                const responseTime = Date.now() - startTime;
+                poolState.responseTimes.push(responseTime);
+                
+                log(`🏁 R${id}: Finished. Released connection #${connIndex + 1}. (Took ${responseTime}ms)`);
+                updatePoolDisplay();
+
+                // After releasing a connection, check the queue again
+                processQueue();
+            }, duration);
+        }
+
+        // Adds a new request to the queue and tries to process it
+        function addRequestToQueue(duration) {
+            const request = {
+                id: poolState.nextRequestId++,
+                duration: duration,
+                startTime: Date.now()
+            };
+
+            poolState.totalRequests++;
+            poolState.requestQueue.push(request);
+            log(`📥 R${request.id}: Request received, added to queue.`);
+            updatePoolDisplay();
+            
+            // Try to process the queue immediately
+            processQueue();
+        }
+
+        // --- Button Click Handlers ---
+
+        function simulateRequest(duration = 1500) {
+            addRequestToQueue(duration);
+        }
+
+        function simulateBurst() {
+            log('💥 Simulating a burst of 10 requests!');
+            for (let i = 0; i < 10; i++) {
+                // Add a small delay between burst requests to make the simulation clearer
+                setTimeout(() => {
+                    simulateRequest(Math.random() * 1000 + 500); // Random duration
+                }, i * 100);
+            }
+        }
+
+        function simulateSlowQuery() {
+            log('🐌 Simulating a slow 5-second query.');
+            simulateRequest(5000);
+        }
+
+        function resetPool() {
+            // This is a bit complex due to ongoing timeouts, so we'll just reset the state object
+            // and clear visual indicators. Active timeouts will still complete.
+            poolState = {
+                connections: [false, false, false, false, false],
+                requestQueue: [],
+                totalRequests: 0,
+                successfulRequests: 0,
+                responseTimes: [],
+                nextRequestId: 1,
+            };
+            log('🔄 Pool simulator has been reset.');
+            updatePoolDisplay();
+        }
+
+        // --- END OF COMPLETED CODE ---
+    </script>
+</body>
+</html>
